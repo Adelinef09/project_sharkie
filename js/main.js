@@ -1,65 +1,100 @@
+// Gestion des importations
 import Fish from "./Fish.js";
+import Shark from "./Shark.js";
 
+// Déclaration des variables
 let canvas;
 let engine;
 let scene;
 let camera;
 let wsize = 800;
 let inputStates = {};
-let sharkie;
 let limite1;
 let limite2;
-let fish;
+let nbFish = 0;
+let positionFishes = [[-100, 100], [-150, -130], [-300, -180], [-400, -80], [-400, 100], [150, 130], [200, 100], [200, 350], [400, 250], [300, -250]];
+
 
 window.onload = startGame;
 
 async function startGame() {
-    //Récupération du canvas
-    canvas = document.querySelector("#myCanvas");
-    //Création d'une instance du moteur 3D
-    engine = new BABYLON.Engine(canvas, true);
+  //Récupération du canvas
+  canvas = document.querySelector("#myCanvas");
+  //Création d'une instance du moteur 3D
+  engine = new BABYLON.Engine(canvas, true);
+  
+  scene = await createScene();
+  scene.enablePhysics();
+  
+  // Modification des settings
+  modifySettings();
 
-    scene = await createScene();
-    scene.enablePhysics();
+  //Récupération du requin
+  let shark = new Shark();
+  await shark.build(scene, canvas);
 
-    //Modification des paramètres par défault
-    modifySettings();
+  //Création des poissons
+  //for (nbFish; nbFish < 6; nbFish++){
+    let fish = new Fish();
+    await fish.build(nbFish, scene, canvas, [-100, -100]); //posPoissons(positionFishes));  
+  //}
+  
+  scene.toRender = () =>{
+      let deltaTime = engine.getDeltaTime();
 
-    //Récupération du requin
-    sharkie = scene.getMeshByName("herosharkie");
-
-    //Récupération des poissons
-    fish = scene.getMeshByName("fish");
-
-    // main animation loop 60 times/s
-    engine.runRenderLoop(() => {
-        let deltaTime = engine.getDeltaTime();
-
-        sharkie.move();
-        scene.render();
-    });
+      shark.checkActionShark(deltaTime, inputStates);
+      scene.render();
+  };
+  scene.assetsManager.load();
 }
 
 //Création de la scène
-async function createScene() {
+function createScene() {
   //Initialisation de la scène
   let scene = new BABYLON.Scene(engine);
+  scene.assetsManager = configureAssetManager(scene);
+
   scene.clearColor = new BABYLON.Color3(0.14, 0.44, 0.67);
   createLights(scene);
   let ground = createGround(scene);
 
-  //Création du requin
-  sharkie = createSharkie(scene);
-
-  //Création des poissons
-  await createFishs(scene);
-
-  //Création des caméras
-  let freeCamera = createFreeCamera(scene);
-  let followCamera = createFollowCamera(scene, sharkie);
-  //scene.activeCamera = followCamera;
-
   return scene;
+}
+
+//Gérer la configuration des assets
+function configureAssetManager(scene) {
+  // useful for storing references to assets as properties. i.e scene.assets.cannonsound, etc.
+  scene.assets = {};
+
+  let assetsManager = new BABYLON.AssetsManager(scene);
+
+  assetsManager.onProgress = function (
+    remainingCount,
+    totalCount,
+    lastFinishedTask
+  ) {
+    engine.loadingUIText =
+      "We are loading the scene. " +
+      remainingCount +
+      " out of " +
+      totalCount +
+      " items still need to be loaded.";
+    console.log(
+      "We are loading the scene. " +
+      remainingCount +
+      " out of " +
+      totalCount +
+      " items still need to be loaded."
+    );
+  };
+
+  assetsManager.onFinish = function (tasks) {
+    engine.runRenderLoop(function () {
+      scene.toRender();
+    });
+  };
+
+  return assetsManager;
 }
 
 //Création des lumières
@@ -99,7 +134,7 @@ function createGround(scene){
     ground2Material.diffuseTexture.vScale = 6;
     ground2Material.specularColor = new BABYLON.Color3(0, 0, 0);
     ground2.scaling = new BABYLON.Vector3(10,10,10);
-    ground2.position.y = -10;
+    ground2.position.y = -5.2;
     
     // Water
     var water = BABYLON.Mesh.CreateGround("waterMesh", 100, 100, 100, scene, false);
@@ -109,52 +144,17 @@ function createGround(scene){
     waterMaterial.alpha = 0.5;
     waterMaterial.diffuseTexture.uScale = 6;
     waterMaterial.diffuseTexture.vScale = 6;
-    water.position.y = 10;
-    water.scaling = new BABYLON.Vector3(10,10,10);
+    water.position.y = 20;
+    water.scaling = new BABYLON.Vector3(10,20,10);
 
     //Délimitation pour les collisions
     limite1 = BABYLON.MeshBuilder.CreateSphere("limite1", {diameterX:280, diameterZ:230, diameterY:50, segment: 32, sideOrientation: BABYLON.Mesh.DOUBLESIDE});
     limite1.position.z = 50;
     limite1.rotation.y = 15;
     limite1.visibility = 0;
-
   });
-}
-
-//Création de la caméra de base
-function createFreeCamera(scene) {
-  let camera = new BABYLON.FreeCamera("freeCamera", new BABYLON.Vector3(0, 50, 0), scene);
-  camera.attachControl(canvas);
-  // prevent camera to cross ground
-  camera.checkCollisions = true; 
-  // avoid flying with the camera
-  camera.applyGravity = false;
-
-  // Add extra keys for camera movements
-  // Need the ascii code of the extra key(s). We use a string method here to get the ascii code
-  camera.keysUp.push('z'.charCodeAt(0));
-  camera.keysDown.push('s'.charCodeAt(0));
-  camera.keysLeft.push('q'.charCodeAt(0));
-  camera.keysRight.push('d'.charCodeAt(0));
-  camera.keysUp.push('Z'.charCodeAt(0));
-  camera.keysDown.push('S'.charCodeAt(0));
-  camera.keysLeft.push('Q'.charCodeAt(0));
-  camera.keysRight.push('D'.charCodeAt(0));
-
-  return camera;
-}
-
-//Création de la caméra suivant le requin
-function createFollowCamera(scene, target) {
-  let camera = new BABYLON.FollowCamera("sharkieFollowCamera", target.position, scene, target);
-
-  camera.radius = 120; // how far from the object to follow
-  camera.heightOffset = 50; // how high above the object to place the camera
-  camera.rotationOffset = 220; // the viewing angle
-  camera.cameraAcceleration = .1; // how fast to move
-  camera.maxCameraSpeed = 5; // speed limit
-
-  return camera;
+  // Ajout de la physique
+  //ground.PhysicsImpostor = new BABYLON.PhysicsImpostor(ground, BABYLON.PhysicsImpostor.HeightmapImpostor, {mass : 0}, scene);
 }
 
 //Création du requin
@@ -198,13 +198,19 @@ function createSharkie(scene) {
   return sharkie;
 }
 
-//Création des poissons
-async function createFishs(scene) {
-  // load the Fish 3D animated model
-  fish = await BABYLON.SceneLoader.ImportMeshAsync("", "models/Fish/", "fish.glb", scene, function (meshes) { 
-    var root = meshes[0];
-    root.position = new BABYLON.Vector3(0, 100, 0);
-   });
+//Gestion de la position des poissons
+function posPoissons(listCoord){
+  if (listCoord.length == 0){
+    positionFishes = [[-100, 100], [-150, -130], [-300, -180], [-400, -80], [-400, 100], [150, 130], [200, 100], [200, 350], [400, 250], [300, -250]];
+    listCoord = [[-100, 100], [-150, -130], [-300, -180], [-400, -80], [-400, 100], [150, 130], [200, 100], [200, 350], [400, 250], [300, -250]];
+  }
+  // Choix aleatoire des coordonnees du poisson
+  let coord = listCoord[Math.floor(Math.random() * (listCoord.length + 1))];
+  // Suppression des coordonnees deja utilisees
+  positionFishes.splice(positionFishes.indexOf(coord), 1);
+
+  return coord;
+
 }
 
 //Redimensionnement de la fenetre
@@ -212,7 +218,7 @@ window.addEventListener("resize", () => {
     engine.resize()
 })
 
-//Modification des pramètres
+//Modification des paramètres
 function modifySettings() {
   // as soon as we click on the game window, the mouse pointer is "locked"
   // you will have to press ESC to unlock it
