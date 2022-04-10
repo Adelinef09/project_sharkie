@@ -1,4 +1,5 @@
 import Fish from "./Fish.js";
+import Shark from "./Shark.js";
 
 let canvas;
 let engine;
@@ -6,14 +7,13 @@ let scene;
 let camera;
 let wsize = 800;
 let inputStates = {};
-let sharkie;
 let limite1;
 let limite2;
 let fish;
 
-window.onload = startGame;
+//window.onload = startGame;
 
-async function startGame() {
+export async function startGame(canvasId) {
     //Récupération du canvas
     canvas = document.querySelector("#myCanvas");
     //Création d'une instance du moteur 3D
@@ -22,22 +22,36 @@ async function startGame() {
     scene = await createScene();
     scene.enablePhysics();
 
+    canvas = document.getElementById(canvasId);
+
     //Modification des paramètres par défault
     modifySettings();
 
+  
     //Récupération du requin
-    sharkie = scene.getMeshByName("herosharkie");
+    //shark = scene.getMeshByName("herosharkie");
+    let shark = new Shark();
+    await shark.build(scene,canvas);
 
     //Récupération des poissons
-    fish = scene.getMeshByName("fish");
+    //fish = scene.getMeshByName("fish");
 
     // main animation loop 60 times/s
-    engine.runRenderLoop(() => {
-        let deltaTime = engine.getDeltaTime();
+    engine.runRenderLoop(async () => {
+      shark.checkActionShark(engine.getDeltaTime());
 
-        sharkie.move();
-        scene.render();
+      //let deltaTime = engine.getDeltaTime();
+
+        
+      scene.render();
     });
+
+    //Redimensionnement de la fenetre
+window.addEventListener("resize", function() {
+  if (engine){
+    engine.resize()
+  }
+})
 }
 
 //Création de la scène
@@ -49,15 +63,18 @@ async function createScene() {
   let ground = createGround(scene);
 
   //Création du requin
-  sharkie = createSharkie(scene);
+  //let shark = await createSharkie(scene);
 
   //Création des poissons
-  await createFishs(scene);
+  //await createFishs(scene);
 
   //Création des caméras
   let freeCamera = createFreeCamera(scene);
-  let followCamera = createFollowCamera(scene, sharkie);
-  //scene.activeCamera = followCamera;
+  //scene.followCameraShark = createFollowCamera(scene, shark);
+  //scene.activeCamera = scene.followCameraShark;
+
+  //Axe de mouvement X et Z
+  //scene.addListenerMovement();
 
   return scene;
 }
@@ -79,7 +96,7 @@ function createLights(scene) {
 
 //Création de la map
 function createGround(scene){
-  let ground = BABYLON.Mesh.CreateGroundFromHeightMap("ground", "assets/map/heightMap.png", 100, 100, 100, 0, 10, scene, false, (mesh) => {
+    /*let ground = BABYLON.Mesh.CreateGroundFromHeightMap("ground", "assets/map/heightMap.png", 100, 100, 100, 0, 10, scene, false, (mesh) => {
     var groundMaterial = new BABYLON.StandardMaterial("ground", scene);
     groundMaterial.diffuseTexture = new BABYLON.Texture("assets/map/ground.jpg", scene);
     groundMaterial.diffuseTexture.uScale = 6;
@@ -99,7 +116,7 @@ function createGround(scene){
     ground2Material.diffuseTexture.vScale = 6;
     ground2Material.specularColor = new BABYLON.Color3(0, 0, 0);
     ground2.scaling = new BABYLON.Vector3(10,10,10);
-    ground2.position.y = -10;
+    ground2.position.y = -10;*/
     
     // Water
     var water = BABYLON.Mesh.CreateGround("waterMesh", 100, 100, 100, scene, false);
@@ -113,12 +130,13 @@ function createGround(scene){
     water.scaling = new BABYLON.Vector3(10,10,10);
 
     //Délimitation pour les collisions
-    limite1 = BABYLON.MeshBuilder.CreateSphere("limite1", {diameterX:280, diameterZ:230, diameterY:50, segment: 32, sideOrientation: BABYLON.Mesh.DOUBLESIDE});
+    /*limite1 = BABYLON.MeshBuilder.CreateSphere("limite1", {diameterX:280, diameterZ:230, diameterY:50, segment: 32, sideOrientation: BABYLON.Mesh.DOUBLESIDE});
     limite1.position.z = 50;
     limite1.rotation.y = 15;
     limite1.visibility = 0;
 
-  });
+
+  });*/
 }
 
 //Création de la caméra de base
@@ -146,7 +164,8 @@ function createFreeCamera(scene) {
 
 //Création de la caméra suivant le requin
 function createFollowCamera(scene, target) {
-  let camera = new BABYLON.FollowCamera("sharkieFollowCamera", target.position, scene, target);
+  let targetName = target.name;
+  let camera = new BABYLON.FollowCamera(targetName + "sharkieFollowCamera", target.position, scene, target);
 
   camera.radius = 120; // how far from the object to follow
   camera.heightOffset = 50; // how high above the object to place the camera
@@ -157,60 +176,16 @@ function createFollowCamera(scene, target) {
   return camera;
 }
 
-//Création du requin
-function createSharkie(scene) {
-  let sharkie = new BABYLON.MeshBuilder.CreateBox("herosharkie", {height:1, depth:6, width:6}, scene);
-  // à modifier pour avoir un requin
-  let sharkieMaterial = new BABYLON.StandardMaterial("sharkieMaterial", scene);
-  sharkieMaterial.diffuseColor = new BABYLON.Color3.Red;
-  sharkieMaterial.emissiveColor = new BABYLON.Color3.Blue;
-  sharkie.material = sharkieMaterial;
-
-  //Position de départ du joueur
-  sharkie.position.y = 5;
-  sharkie.position.x = -150;
-  sharkie.position.z = -150;
-  sharkie.speed = 3;
-  sharkie.frontVector = new BABYLON.Vector3(0, 0, 1);
-
-  sharkie.move = () => {
-      let yMovement = 0;
-      
-      if(inputStates.up) {
-        //if(sharkie.intersectsMesh(limite1, false)){
-          sharkie.moveWithCollisions(sharkie.frontVector.multiplyByFloats(sharkie.speed, 0, sharkie.speed));
-        //}
-      }    
-      if(inputStates.down) {
-          sharkie.moveWithCollisions(sharkie.frontVector.multiplyByFloats(-sharkie.speed, 0, -sharkie.speed));
-      }  
-      if(inputStates.left) {
-          //sharkie.moveWithCollisions(new BABYLON.Vector3(-1*sharkie.speed, 0, 0));
-          sharkie.rotation.y -= 0.02;
-          sharkie.frontVector = new BABYLON.Vector3(Math.sin(sharkie.rotation.y), 0, Math.cos(sharkie.rotation.y));
-      }    
-      if(inputStates.right) {
-          //sharkie.moveWithCollisions(new BABYLON.Vector3(1*sharkie.speed, 0, 0));
-          sharkie.rotation.y += 0.02;
-          sharkie.frontVector = new BABYLON.Vector3(Math.sin(sharkie.rotation.y), 0, Math.cos(sharkie.rotation.y));
-      }
-  }
-  return sharkie;
-}
 
 //Création des poissons
-async function createFishs(scene) {
+/*async function createFishs(scene) {
   // load the Fish 3D animated model
   fish = await BABYLON.SceneLoader.ImportMeshAsync("", "models/Fish/", "fish.glb", scene, function (meshes) { 
-    var root = meshes[0];
-    root.position = new BABYLON.Vector3(0, 100, 0);
+   
    });
-}
+}*/
 
-//Redimensionnement de la fenetre
-window.addEventListener("resize", () => {
-    engine.resize()
-})
+
 
 //Modification des pramètres
 function modifySettings() {
@@ -236,39 +211,59 @@ function modifySettings() {
   })
 
   // key listeners for the tank
-  inputStates.left = false;
-  inputStates.right = false;
-  inputStates.up = false;
-  inputStates.down = false;
-  inputStates.space = false;
-  
+  scene.inputStates = {};
+  scene.inputStates.left = false;
+  scene.inputStates.right = false;
+  scene.inputStates.up = false;
+  scene.inputStates.down = false;
+  scene.inputStates.space = false;
+
   //add the listener to the main, window object, and update the states
-  window.addEventListener('keydown', (event) => {
-      if ((event.key === "ArrowLeft") || (event.key === "q")|| (event.key === "Q")) {
-         inputStates.left = true;
-      } else if ((event.key === "ArrowUp") || (event.key === "z")|| (event.key === "Z")){
-         inputStates.up = true;
-      } else if ((event.key === "ArrowRight") || (event.key === "d")|| (event.key === "D")){
-         inputStates.right = true;
-      } else if ((event.key === "ArrowDown")|| (event.key === "s")|| (event.key === "S")) {
-         inputStates.down = true;
-      }  else if (event.key === " ") {
-         inputStates.space = true;
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      if (event.key === "ArrowLeft" || event.key === "q" || event.key === "Q") {
+        scene.inputStates.left = true;
+      } else if (
+        event.key === "ArrowUp"
+      ) {
+        scene.inputStates.up = true;
+      } else if (
+        event.key === "ArrowRight" 
+      ) {
+        scene.inputStates.right = true;
+      } else if (
+        event.key === "ArrowDown"
+      ) {
+        scene.inputStates.down = true;
+      } else if (event.key === " ") {
+        scene.inputStates.space = true;
+      } else if (event.key === "l" || event.key === "L") {
+        scene.inputStates.laser = true;
+      } else if (event.key == "t" || event.key == "T") {
+        scene.activeCamera = scene.followCameraTank;
+      } else if (event.key == "y" || event.key == "Y") {
+        scene.activeCamera = scene.followCameraDude;
+      } else if (event.key == "u" || event.key == "U") {
+        scene.activeCamera = scene.freeCameraDude;
       }
-  }, false);
+    },
+    false);
 
   //if the key will be released, change the states object 
   window.addEventListener('keyup', (event) => {
-      if ((event.key === "ArrowLeft") || (event.key === "q")|| (event.key === "Q")) {
+      if ((event.key === "ArrowLeft")) {
          inputStates.left = false;
-      } else if ((event.key === "ArrowUp") || (event.key === "z")|| (event.key === "Z")){
+      } else if ((event.key === "ArrowUp")){
          inputStates.up = false;
-      } else if ((event.key === "ArrowRight") || (event.key === "d")|| (event.key === "D")){
+      } else if ((event.key === "ArrowRight")){
          inputStates.right = false;
-      } else if ((event.key === "ArrowDown")|| (event.key === "s")|| (event.key === "S")) {
+      } else if ((event.key === "ArrowDown")) {
          inputStates.down = false;
       }  else if (event.key === " ") {
          inputStates.space = false;
       }
   }, false);
+
+  
 }
